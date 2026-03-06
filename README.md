@@ -1,19 +1,22 @@
 ﻿# 🏥 MedChart Vitals Visualizer
 
-> **HACKARENA Submission** 
-
-# 🏥 MedChart Vitals Visualizer
-
 > **HACKARENA Submission**
 > 🏆 **Team:** Missing Links
+
+**Live Link:** https://medbot-iota.vercel.app/
+
+**GitHub Repo:** https://github.com/ssmstars/medbot.git
 
 MedChart Vitals Visualizer is a state-of-the-art, web-based clinical dashboard designed to parse, visualize, and analyze patient demographic and vital sign data. Built with an acute focus on UI/UX, clinical realism, and actionable insights, the platform leverages interactive visualizations and AI to assist healthcare professionals in monitoring patient health efficiently.
 
 ## 👥 Team: Missing Links
-* **Kushala B Gowda** - Team Lead
-* **Suhas D** - Main Contributor
-* **Mohitha R** - UI/UX Designer
-* **Deepak R** - Backend Developer
+
+| Name | Role |
+| --- | --- |
+| Kushala B Gowda | Team Lead |
+| Suhas D | Core Developer |
+| Mohitha R | UI/UX Designer |
+| Deepak R | Backend Developer |
 
 ## ✨ Key Features & "Wow" Factors
 - 📊 **Dynamic Data Visualization:** Upload CSV files to instantly generate robust, interactive patient vitals charts using Chart.js.
@@ -22,6 +25,10 @@ MedChart Vitals Visualizer is a state-of-the-art, web-based clinical dashboard d
 - 🚀 **Automated Guided Tour:** An interactive demo mode that seamlessly guides users through the app's capabilities.
 - 🖱️ **Modern UI/UX:** Drag-and-drop file upload zones, responsive KPI cards, utilizing the modern 'Inter' font for ultimate readability.
 - 🤖 **Med-Bot AI Assistant:** Integrated Groq/LLaMA-powered chatbot to analyze vitals, answer clinical queries, and provide predictive insights.
+
+## 🧠 Explainability
+- **AI logic entry point:** Chat requests are handled in `POST /chat` on the backend, with a simulated response when `GROQ_API_KEY` is missing. See [server.js](server.js#L51-L129).
+- **UI trigger:** Each critical alert includes an “AI Explain” action that opens the chat and pre-fills an explanation request. See [public/app.js](public/app.js#L215-L248).
 
 ## 🩸 Clinical Thresholds
 | Vital Sign | Normal Range | Critical Trigger |
