@@ -3,11 +3,17 @@ const uploadBtn   = document.getElementById("uploadBtn");
 const uploadStatus = document.getElementById("uploadStatus");
 const alertList   = document.getElementById("alertList");
 const alertSummary = document.getElementById("alertSummary");
+const downloadReportBtn = document.getElementById("downloadReportBtn");
 const chatInput   = document.getElementById("chatInput");
 const chatSendBtn = document.getElementById("chatSendBtn");
 const chatMessages = document.getElementById("chatMessages");
 
 let currentVitals = [];
+
+const setReportAvailability = (enabled) => {
+  if (!downloadReportBtn) return;
+  downloadReportBtn.disabled = !enabled;
+};
 
 // â”€â”€ Theme Toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const themeToggleBtn = document.getElementById("themeToggleBtn");
@@ -504,6 +510,128 @@ const buildInsights = (rows) => {
   if (hrTrend.cls === "trend-down") add("Heart rate trending downward — monitor for bradycardia.");
 };
 
+const getInsightLines = () => {
+  const list = document.getElementById("insightsList");
+  if (!list) return [];
+  return Array.from(list.querySelectorAll("li"))
+    .map(li => li.textContent.trim())
+    .filter(Boolean);
+};
+
+const buildMedicalReport = (rows) => {
+  const hrVals  = rows.map(r => +r.heart_rate);
+  const bpVals  = rows.map(r => +r.systolic_bp);
+  const tmpVals = rows.map(r => +r.temperature);
+
+  const stats = (arr) => ({
+    min: Math.min(...arr),
+    max: Math.max(...arr),
+    avg: arr.reduce((a,b)=>a+b,0) / arr.length,
+    latest: arr[arr.length - 1]
+  });
+
+  const hrS  = stats(hrVals);
+  const bpS  = stats(bpVals);
+  const tmpS = stats(tmpVals);
+
+  const hrCrit  = hrVals.filter(v => isCritical(v, "heart_rate")).length;
+  const bpCrit  = bpVals.filter(v => isCritical(v, "systolic_bp")).length;
+  const tmpCrit = tmpVals.filter(v => isCritical(v, "temperature")).length;
+  const totalCrit = hrCrit + bpCrit + tmpCrit;
+
+  const rawEWS = Math.min(
+    Math.round(hrCrit * 0.9 + bpCrit * 0.9 + tmpCrit * 0.6),
+    10
+  );
+  const ewsLevel = rawEWS <= 2 ? "LOW RISK" : rawEWS <= 5 ? "MODERATE" : "HIGH RISK";
+  const status = totalCrit === 0 ? "STABLE" : totalCrit <= 3 ? "WARNING" : "CRITICAL";
+
+  const fmt = (v, d = 1) => Number.isFinite(v) ? v.toFixed(d) : "--";
+  const firstTs = rows[0]?.timestamp || "--";
+  const lastTs  = rows[rows.length - 1]?.timestamp || "--";
+
+  const trendToLabel = (trend) => {
+    if (trend.cls === "trend-up") return "Increasing";
+    if (trend.cls === "trend-down") return "Dropping";
+    return "Stable";
+  };
+
+  const trends = {
+    hr: trendToLabel(computeTrend(hrVals, 5)),
+    bp: trendToLabel(computeTrend(bpVals, 5)),
+    temp: trendToLabel(computeTrend(tmpVals, 0.3))
+  };
+
+  const criticalEvents = [];
+  rows.forEach(r => {
+    if (isCritical(r.heart_rate, "heart_rate")) {
+      criticalEvents.push(`Heart Rate: ${r.heart_rate} BPM at ${r.timestamp}`);
+    }
+    if (isCritical(r.systolic_bp, "systolic_bp")) {
+      criticalEvents.push(`Systolic BP: ${r.systolic_bp} mmHg at ${r.timestamp}`);
+    }
+    if (isCritical(r.temperature, "temperature")) {
+      criticalEvents.push(`Temperature: ${r.temperature} C at ${r.timestamp}`);
+    }
+  });
+
+  const insights = getInsightLines();
+  const generatedAt = new Date().toLocaleString();
+
+  return [
+    "MedChart Medical Report",
+    "=======================",
+    `Generated: ${generatedAt}`,
+    "",
+    `Readings: ${rows.length}`,
+    `Time Range: ${firstTs} to ${lastTs}`,
+    "",
+    `Status: ${status}`,
+    `Critical Readings: ${totalCrit} (HR ${hrCrit}, BP ${bpCrit}, Temp ${tmpCrit})`,
+    `Early Warning Score: ${rawEWS} (${ewsLevel})`,
+    "",
+    "Vital Statistics",
+    "---------------",
+    `Heart Rate (BPM): min ${fmt(hrS.min, 0)}, avg ${fmt(hrS.avg, 1)}, max ${fmt(hrS.max, 0)}, latest ${fmt(hrS.latest, 0)}`,
+    `Systolic BP (mmHg): min ${fmt(bpS.min, 0)}, avg ${fmt(bpS.avg, 1)}, max ${fmt(bpS.max, 0)}, latest ${fmt(bpS.latest, 0)}`,
+    `Temperature (C): min ${fmt(tmpS.min, 1)}, avg ${fmt(tmpS.avg, 1)}, max ${fmt(tmpS.max, 1)}, latest ${fmt(tmpS.latest, 1)}`,
+    "",
+    "Trends",
+    "------",
+    `Heart Rate: ${trends.hr}`,
+    `Systolic BP: ${trends.bp}`,
+    `Temperature: ${trends.temp}`,
+    "",
+    "Clinical Insights",
+    "-----------------",
+    ...(insights.length ? insights.map(i => `- ${i}`) : ["- No insights available."]),
+    "",
+    "Critical Event Log",
+    "------------------",
+    ...(criticalEvents.length ? criticalEvents.map(e => `- ${e}`) : ["- No critical events recorded."]),
+    ""
+  ].join("\n");
+};
+
+const downloadReport = () => {
+  if (!currentVitals.length) return;
+  const report = buildMedicalReport(currentVitals);
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const filename = `medchart-report-${stamp}.txt`;
+
+  const blob = new Blob([report], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+downloadReportBtn?.addEventListener("click", downloadReport);
+
 // â”€â”€ Critical Event Timeline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const buildTimeline = (rows) => {
   const container = document.getElementById("timeline");
@@ -752,6 +880,7 @@ const loadDemoData = async () => {
     buildInsights(data.rows);
     buildTimeline(data.rows);
     runPrediction(data.rows);
+    setReportAvailability(true);
   } catch (err) {
     uploadStatus.textContent = "Demo load failed: " + err.message;
     btn.textContent = "▶ Start Demo";
@@ -902,6 +1031,7 @@ uploadBtn.addEventListener("click", async () => {
     buildInsights(data.rows);
     buildTimeline(data.rows);
     runPrediction(data.rows);
+    setReportAvailability(true);
   } catch {
     uploadStatus.textContent = "Upload failed. Check server logs.";
     uploadStatus.className = "status fail";
