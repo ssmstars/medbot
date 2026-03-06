@@ -1,0 +1,281 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MedChart Vitals Visualizer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <!-- Prevent flash of wrong theme -->
+    <script>
+      (function(){
+        var t = localStorage.getItem("medchart-theme") || "dark";
+        document.documentElement.setAttribute("data-theme", t);
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="page">
+
+      <!-- Header -->
+      <header class="hero">
+        <div>
+          <p class="eyebrow">MedChart</p>
+          <h1>Vitals Visualizer</h1>
+          <p class="subtitle">
+            Upload patient monitoring CSV data to reveal trends and critical readings at a glance.
+          </p>
+        </div>
+        <div class="upload-card">
+          <button id="themeToggleBtn" type="button" class="theme-toggle" title="Switch theme" aria-label="Toggle light/dark theme">
+            <span id="themeIcon">🌙</span> <span id="themeLabel">Light Mode</span>
+          </button>
+          <div id="dropZone" class="drop-zone">
+            <div class="drop-icon">📁</div>
+            <p class="drop-main">Drop your CSV here</p>
+            <p class="drop-sub">or click to browse — requires <code>timestamp, heart_rate, systolic_bp, temperature</code></p>
+            <input id="csvFile" type="file" accept=".csv" class="drop-input" />
+          </div>
+          <button id="uploadBtn" type="button" class="analyze-btn">Analyze</button>
+          <button id="demoBtn" type="button" class="demo-launch-btn">▶ Start Demo</button>
+          <p id="uploadStatus" class="status">Waiting for file.</p>
+        </div>
+      </header>
+
+      <!-- Patient Status Badge -->
+      <section id="statusSection" style="display:none" class="status-section">
+        <div id="statusBadge" class="status-badge">
+          <span id="statusDot" class="status-pulse"></span>
+          <span id="statusLabel">STABLE</span>
+          <span id="statusSub" class="status-sub">0 critical readings</span>
+        </div>
+        <div class="ews-block">
+          <p class="ews-label">Early Warning Score</p>
+          <p id="ewsScore" class="ews-score">0</p>
+          <p id="ewsLevel" class="ews-level">LOW RISK</p>
+          <div class="gauge-bar"><div class="gauge-fill" id="gauge-ews"></div></div>
+        </div>
+        <div class="trend-block">
+          <p class="ews-label">Vital Trends</p>
+          <div class="trend-row"><span class="trend-vital">Heart Rate</span><span id="trend-hr" class="trend-val">--</span></div>
+          <div class="trend-row"><span class="trend-vital">Systolic BP</span><span id="trend-bp" class="trend-val">--</span></div>
+          <div class="trend-row"><span class="trend-vital">Temperature</span><span id="trend-temp" class="trend-val">--</span></div>
+        </div>
+      </section>
+
+      <!-- KPI Stat Cards -->
+      <div class="section-label"><span>📊 Overview</span></div>
+      <section class="kpi-row" id="kpiSection" style="display:none">
+        <div class="kpi-card" id="kpi-hr">
+          <p class="kpi-label"><span class="kpi-icon">❤️</span> Heart Rate</p>
+          <p class="kpi-latest" id="kpi-hr-latest">--</p>
+          <p class="kpi-unit">BPM</p>
+          <div class="kpi-stats">
+            <span>Min <strong id="kpi-hr-min">--</strong></span>
+            <span>Avg <strong id="kpi-hr-avg">--</strong></span>
+            <span>Max <strong id="kpi-hr-max">--</strong></span>
+          </div>
+          <div class="gauge-bar"><div class="gauge-fill" id="gauge-hr"></div></div>
+        </div>
+        <div class="kpi-card" id="kpi-bp">
+          <p class="kpi-label"><span class="kpi-icon">🩸</span> Systolic BP</p>
+          <p class="kpi-latest" id="kpi-bp-latest">--</p>
+          <p class="kpi-unit">mmHg</p>
+          <div class="kpi-stats">
+            <span>Min <strong id="kpi-bp-min">--</strong></span>
+            <span>Avg <strong id="kpi-bp-avg">--</strong></span>
+            <span>Max <strong id="kpi-bp-max">--</strong></span>
+          </div>
+          <div class="gauge-bar"><div class="gauge-fill" id="gauge-bp"></div></div>
+        </div>
+        <div class="kpi-card" id="kpi-temp">
+          <p class="kpi-label"><span class="kpi-icon">🌡️</span> Temperature</p>
+          <p class="kpi-latest" id="kpi-temp-latest">--</p>
+          <p class="kpi-unit">&deg;C</p>
+          <div class="kpi-stats">
+            <span>Min <strong id="kpi-temp-min">--</strong></span>
+            <span>Avg <strong id="kpi-temp-avg">--</strong></span>
+            <span>Max <strong id="kpi-temp-max">--</strong></span>
+          </div>
+          <div class="gauge-bar"><div class="gauge-fill" id="gauge-temp"></div></div>
+        </div>
+        <div class="kpi-card kpi-alert-card">
+          <p class="kpi-label"><span class="kpi-icon">🔔</span> Critical Alerts</p>
+          <p class="kpi-latest" id="kpi-alert-count" style="color:var(--critical)">0</p>
+          <p class="kpi-unit">readings</p>
+          <div class="kpi-stats">
+            <span>HR <strong id="kpi-hr-crit">0</strong></span>
+            <span>BP <strong id="kpi-bp-crit">0</strong></span>
+            <span>Temp <strong id="kpi-temp-crit">0</strong></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Charts -->
+      <div class="section-label"><span>📈 Vitals Charts</span></div>
+      <!-- Combined Overview Chart -->
+      <section class="section-row" id="overviewSection" style="display:none">
+        <div class="panel panel-wide">
+          <h2>Combined Vitals Overview <span class="panel-hint">(normalised 0-100%)</span></h2>
+          <canvas id="overviewChart"></canvas>
+        </div>
+      </section>
+
+      <!-- Individual Line Charts -->
+      <section class="dashboard" id="dashboardSection" style="display:none">
+        <div class="panel">
+          <h2>Heart Rate <span class="panel-hint">BPM</span></h2>
+          <canvas id="heartRateChart"></canvas>
+        </div>
+        <div class="panel">
+          <h2>Systolic BP <span class="panel-hint">mmHg</span></h2>
+          <canvas id="systolicBpChart"></canvas>
+        </div>
+        <div class="panel">
+          <h2>Temperature <span class="panel-hint">&deg;C</span></h2>
+          <canvas id="temperatureChart"></canvas>
+        </div>
+      </section>
+
+      <!-- Distribution + Scatter -->
+      <section class="two-col-row" id="distSection" style="display:none">
+        <div class="panel">
+          <h2>Normal vs Critical <span class="panel-hint">count per vital</span></h2>
+          <canvas id="distChart"></canvas>
+        </div>
+        <div class="panel">
+          <h2>HR vs Systolic BP <span class="panel-hint">scatter</span></h2>
+          <canvas id="scatterChart"></canvas>
+        </div>
+      </section>
+
+      <!-- Insights -->
+      <div class="section-label"><span>🧠 Clinical Analysis</span></div>
+      <!-- Clinical Insights + Event Timeline -->
+      <section class="two-col-row" id="insightsSection" style="display:none">
+        <div class="panel">
+          <h2>Clinical Insights <span class="panel-hint">auto-generated</span></h2>
+          <ul id="insightsList" class="insights-list"></ul>
+        </div>
+        <div class="panel">
+          <h2>Critical Event Timeline</h2>
+          <div id="timeline" class="timeline"></div>
+        </div>
+      </section>
+
+      <!-- Prediction Panel -->
+      <section class="section-row" id="predictionSection" style="display:none">
+        <div class="panel panel-wide">
+          <div class="prediction-header">
+            <h2>5-Minute Forecast <span class="panel-hint">linear regression</span></h2>
+            <button id="predictBtn" type="button" class="btn-outline">Run Prediction</button>
+            <button id="playBtn" type="button" class="btn-outline btn-play">▶ Simulate Live</button>
+          </div>
+          <div id="predictionResult" class="prediction-grid"></div>
+        </div>
+      </section>
+
+      <!-- Alerts -->
+      <div class="section-label"><span>⚠️ Alert Log</span></div>
+      <section class="alerts" id="alertsSection" style="display:none">
+        <div class="panel">
+          <h2>Critical Alert Log</h2>
+          <div id="alertSummary" class="alert-summary">No critical readings yet.</div>
+          <ul id="alertList" class="alert-list"></ul>
+        </div>
+      </section>
+
+      <!-- Guided Demo Tour -->
+      <div id="demoBackdrop" class="demo-backdrop" aria-hidden="true"></div>
+      <div id="demoTooltip" class="demo-tooltip" aria-hidden="true">
+        <div class="demo-meta">
+          <span id="demoStepLabel" class="demo-step-label">Step 1 of 6</span>
+          <button type="button" class="demo-skip" onclick="demoSkip()">Skip Tour</button>
+        </div>
+        <h3 id="demoStepTitle" class="demo-step-title"></h3>
+        <p  id="demoStepBody"  class="demo-step-body"></p>
+        <div class="demo-nav">
+          <button type="button" id="demoPrevBtn" class="demo-btn demo-prev" onclick="demoPrev()">← Back</button>
+          <button type="button" id="demoNextBtn" class="demo-btn demo-next" onclick="demoNext()">Next →</button>
+        </div>
+      </div>
+
+      <!-- Emergency Mode Overlay -->
+      <div id="emergencyOverlay" class="emergency-overlay" aria-hidden="true">
+        <div class="emergency-modal">
+          <div class="em-header">
+            <span class="em-icon">🚨</span>
+            <div>
+              <h2 class="em-title">CRITICAL PATIENT DETECTED</h2>
+              <p class="em-subtitle">Immediate medical attention recommended</p>
+            </div>
+          </div>
+          <div class="em-body">
+            <div class="em-section">
+              <p class="em-section-label">Patient Status</p>
+              <p class="em-status-val">CRITICAL</p>
+            </div>
+            <div class="em-section">
+              <p class="em-section-label">Issues Detected</p>
+              <ul id="emIssuesList" class="em-issues"></ul>
+            </div>
+            <div class="em-section">
+              <p class="em-section-label">Recommended Action</p>
+              <ul class="em-actions">
+                <li>Check patient immediately</li>
+                <li>Notify attending physician</li>
+                <li>Prepare crash cart if HR/BP critical</li>
+                <li>Document event timestamp</li>
+              </ul>
+            </div>
+          </div>
+          <div class="em-footer">
+            <span id="emTimestamp" class="em-time"></span>
+            <button type="button" class="em-dismiss" onclick="dismissEmergency()">✖ Dismiss Emergency</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fixed Emergency Button -->
+      <button id="emergencyBtn" type="button" class="emergency-btn" onclick="activateEmergency()">
+        🚨
+      </button>
+
+      <!-- Floating AI Chatbot Widget -->
+      <div id="chatbotWidget" class="chatbot-widget">
+        <button id="chatbotToggleBtn" class="chatbot-toggle-btn" onclick="document.getElementById('chatbotWidget').classList.toggle('open')">
+          <span class="bot-icon">🤖</span>
+          <span class="bot-btn-label">Ask Med-Bot AI</span>
+        </button>
+        <div class="panel chatbot-panel">
+          <div class="chatbot-header">
+            <div class="bot-title">
+              <span class="bot-dot"></span>
+              <h2>Med-Bot <span class="bot-badge">AI</span></h2>
+            </div>
+            <button class="chat-close-btn" onclick="document.getElementById('chatbotWidget').classList.remove('open')">✖</button>
+          </div>
+          <p class="bot-subtitle">Ask anything about the patient's vitals.</p>
+          <div id="chatMessages" class="chat-messages">
+            <div class="chat-bubble bot">
+              Hello! I’m Med-Bot. Upload a CSV and ask me anything about the patient’s vitals.
+            </div>
+          </div>
+          <div class="chat-input-row">
+            <input id="chatInput" type="text" placeholder="e.g. Is the heart rate trending down?" />
+            <button id="chatSendBtn" type="button">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/vendor/chart.umd.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
+
+
+
+
